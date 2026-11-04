@@ -37,10 +37,15 @@ int getMaxBatteryPower(bool discharge)
     return batterySoc > BATTERY_SOC_MAX ? 0 : BATTERY_MAX_CHARGE_POWER_W;
 }
 
+bool areMeasurementTimestampsValid(int64_t now)
+{
+    return now >= MIN_VALID_UNIX_TIME && consumptionTimestamp != 0 && batteryTimestamp != 0 &&
+           now >= consumptionTimestamp && now >= batteryTimestamp;
+}
+
 int calculateBatterySetpoint(int64_t now)
 {
-    if (now < MIN_VALID_UNIX_TIME || consumptionTimestamp == 0 || batteryTimestamp == 0 ||
-        now < consumptionTimestamp || now < batteryTimestamp)
+    if (!areMeasurementTimestampsValid(now))
     {
         return 0;
     }
@@ -96,6 +101,32 @@ void testBatteryCharging()
     consigneW = consigneW >= 300 ? 50 : consigneW + 50;
 }
 
+bool shouldRetrieveEnphaseToken(int64_t now, unsigned long nowMs)
+{
+    const bool tokenNeedsRefresh = enphaseToken.isEmpty() || enphaseTokenDeadline - now <= TOKEN_REFRESH_MARGIN_SECONDS;
+    const bool retryAllowed = !tokenRequestAttempted || nowMs - lastTokenAttemptMs >= TOKEN_RETRY_INTERVAL_MS;
+    return now >= MIN_VALID_UNIX_TIME && tokenNeedsRefresh && retryAllowed;
+}
+
+bool shouldReadEnphasePower(unsigned long nowMs)
+{
+    const bool pollIntervalElapsed = !powerRequestAttempted || nowMs - lastPowerRequestMs >= POWER_POLL_INTERVAL_MS;
+    const bool tokenIsValid = !enphaseToken.isEmpty() && enphaseTokenDeadline > static_cast<int64_t>(time(nullptr));
+    return ENPHASE_GATEWAY_IP[0] != '\0' && pollIntervalElapsed && tokenIsValid;
+}
+
+bool shouldReadBatteryStatus(unsigned long nowMs)
+{
+    const bool pollIntervalElapsed = !batteryRequestAttempted || nowMs - lastBatteryRequestMs >= BATTERY_POLL_INTERVAL_MS;
+    return ZENDURE_IP[0] != '\0' && pollIntervalElapsed;
+}
+
+bool shouldControlBattery(unsigned long nowMs)
+{
+    const bool controlIntervalElapsed = !controlAttempted || nowMs - lastControlMs >= CONTROL_INTERVAL_MS;
+    return ZENDURE_IP[0] != '\0' && controlIntervalElapsed;
+}
+
 void setup()
 {
     // put your setup code here, to run once:
@@ -134,34 +165,28 @@ void loop()
     }
     const int64_t now = static_cast<int64_t>(time(nullptr));
     const unsigned long nowMs = millis();
-    const bool tokenNeedsRefresh = enphaseToken.isEmpty() || enphaseTokenDeadline - now <= TOKEN_REFRESH_MARGIN_SECONDS;
-    const bool retryAllowed = !tokenRequestAttempted || nowMs - lastTokenAttemptMs >= TOKEN_RETRY_INTERVAL_MS;
-    if (now >= MIN_VALID_UNIX_TIME && tokenNeedsRefresh && retryAllowed)
+    if (shouldRetrieveEnphaseToken(now, nowMs))
     {
         retrieveEnphaseToken();
         lastTokenAttemptMs = millis();
         tokenRequestAttempted = true;
     }
     const unsigned long powerNowMs = millis();
-    if (ENPHASE_GATEWAY_IP[0] != '\0' &&
-        (!powerRequestAttempted || powerNowMs - lastPowerRequestMs >= POWER_POLL_INTERVAL_MS) &&
-        !enphaseToken.isEmpty() && enphaseTokenDeadline > static_cast<int64_t>(time(nullptr)))
+    if (shouldReadEnphasePower(powerNowMs))
     {
         lastPowerRequestMs = powerNowMs;
         powerRequestAttempted = true;
         readEnphaseConsumptionPower();
     }
     const unsigned long batteryNowMs = millis();
-    if (ZENDURE_IP[0] != '\0' &&
-        (!batteryRequestAttempted || batteryNowMs - lastBatteryRequestMs >= BATTERY_POLL_INTERVAL_MS))
+    if (shouldReadBatteryStatus(batteryNowMs))
     {
         lastBatteryRequestMs = batteryNowMs;
         batteryRequestAttempted = true;
         readBatteryStatus();
     }
     const unsigned long controlNowMs = millis();
-    if (ZENDURE_IP[0] != '\0' &&
-        (!controlAttempted || controlNowMs - lastControlMs >= CONTROL_INTERVAL_MS))
+    if (shouldControlBattery(controlNowMs))
     {
         sendBatterySetpoint(calculateBatterySetpoint(static_cast<int64_t>(time(nullptr))));
         lastControlMs = millis();
