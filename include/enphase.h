@@ -17,7 +17,7 @@ extern int64_t consumptionTimestamp;
 extern String enphaseToken;
 extern int64_t enphaseTokenDeadline;
 
-inline bool recupererToken()
+inline bool retrieveEnphaseToken()
 {
     Serial.println("\nStarting token retrieval...");
     if (WiFi.status() != WL_CONNECTED || time(nullptr) < MIN_VALID_UNIX_TIME)
@@ -174,7 +174,7 @@ inline bool recupererToken()
     return true;
 }
 
-inline void lirePuissanceConsommation()
+inline void readEnphaseConsumptionPower()
 {
     static WiFiClientSecure client;
     static HTTPClient http;

@@ -13,7 +13,7 @@ extern double batteryPowerW;
 extern int batterySoc;
 extern int64_t batteryTimestamp;
 
-inline void lirePuissanceBatterie()
+inline void readBatteryStatus()
 {
     WiFiClient client;
     HTTPClient http;
@@ -72,7 +72,7 @@ inline void lirePuissanceBatterie()
     Serial.printf("Battery : %.0f W | SOC : %d%%\n", batteryPowerW, batterySoc);
 }
 
-inline bool envoyerConsigneBatterie(int setpointW)
+inline bool sendBatterySetpoint(int setpointW)
 {
     const char *const ZENDURE_SERIAL_NUMBER = get_secret("ZENDURE_SERIAL_NUMBER", false);
     if (ZENDURE_SERIAL_NUMBER == nullptr || ZENDURE_SERIAL_NUMBER[0] == '\0')

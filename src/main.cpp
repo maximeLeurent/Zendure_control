@@ -6,6 +6,7 @@
 #include "config.h"
 #include "enphase.h"
 #include "secrets.h"
+#include "wifi_connection.h"
 #include "zendure.h"
 
 
@@ -27,9 +28,7 @@ int64_t enphaseTokenDeadline = 0;
 unsigned long lastTokenAttemptMs = 0;
 bool tokenRequestAttempted = false;
 
-void connect();
-
-int getMaxPuissance(bool discharge)
+int getMaxBatteryPower(bool discharge)
 {
     if (discharge)
     {
@@ -38,7 +37,7 @@ int getMaxPuissance(bool discharge)
     return batterySoc > BATTERY_SOC_MAX ? 0 : BATTERY_MAX_CHARGE_POWER_W;
 }
 
-int calculerConsigneBatterie(int64_t now)
+int calculateBatterySetpoint(int64_t now)
 {
     if (now < MIN_VALID_UNIX_TIME || consumptionTimestamp == 0 || batteryTimestamp == 0 ||
         now < consumptionTimestamp || now < batteryTimestamp)
@@ -69,18 +68,18 @@ int calculerConsigneBatterie(int64_t now)
     Serial.printf("Net consumption without battery : %.0f W\n", gridNoBatteryW);
     if (gridNoBatteryW > POWER_DEADBAND_W)
     {
-        return static_cast<int>(fmin(gridNoBatteryW, getMaxPuissance(true)));
+        return static_cast<int>(fmin(gridNoBatteryW, getMaxBatteryPower(true)));
     }
     if (gridNoBatteryW < -POWER_DEADBAND_W)
     {
-        return -static_cast<int>(fmin(-gridNoBatteryW, getMaxPuissance(false)));
+        return -static_cast<int>(fmin(-gridNoBatteryW, getMaxBatteryPower(false)));
     }
     return 0;
 }
 
 constexpr bool TEST_CHARGE = false;
 
-void testerChargeBatterie()
+void testBatteryCharging()
 {
     static int consigneW = 50;
     static unsigned long dernierEnvoiMs = 0;
@@ -93,7 +92,7 @@ void testerChargeBatterie()
 
     dernierEnvoiMs = nowMs;
     envoiEffectue = true;
-    envoyerConsigneBatterie(-consigneW);
+    sendBatterySetpoint(-consigneW);
     consigneW = consigneW >= 300 ? 50 : consigneW + 50;
 }
 
@@ -117,34 +116,19 @@ void setup()
             delay(1000);
         }
     }
-    Serial.println("\nConnecting to Wi-Fi...");
-    WiFi.begin(wifiSsid, wifiPassword);
-    connect();
+    connectToWifi(wifiSsid, wifiPassword);
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-}
-
-void connect()
-{
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(1000);
-        Serial.println("Connecting...");
-    }
-    Serial.println("Connected to Wi-Fi!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
 }
 
 void loop()
 {
     if (WiFi.status() != WL_CONNECTED)
     {
-        Serial.println("Wi-Fi disconnected. Attempting to reconnect...");
-        connect();
+        reconnectToWifi();
     }
     if (TEST_CHARGE)
     {
-        testerChargeBatterie();
+        testBatteryCharging();
         delay(1);
         return;
     }
@@ -154,7 +138,7 @@ void loop()
     const bool retryAllowed = !tokenRequestAttempted || nowMs - lastTokenAttemptMs >= TOKEN_RETRY_INTERVAL_MS;
     if (now >= MIN_VALID_UNIX_TIME && tokenNeedsRefresh && retryAllowed)
     {
-        recupererToken();
+        retrieveEnphaseToken();
         lastTokenAttemptMs = millis();
         tokenRequestAttempted = true;
     }
@@ -165,7 +149,7 @@ void loop()
     {
         lastPowerRequestMs = powerNowMs;
         powerRequestAttempted = true;
-        lirePuissanceConsommation();
+        readEnphaseConsumptionPower();
     }
     const unsigned long batteryNowMs = millis();
     if (ZENDURE_IP[0] != '\0' &&
@@ -173,13 +157,13 @@ void loop()
     {
         lastBatteryRequestMs = batteryNowMs;
         batteryRequestAttempted = true;
-        lirePuissanceBatterie();
+        readBatteryStatus();
     }
     const unsigned long controlNowMs = millis();
     if (ZENDURE_IP[0] != '\0' &&
         (!controlAttempted || controlNowMs - lastControlMs >= CONTROL_INTERVAL_MS))
     {
-        envoyerConsigneBatterie(calculerConsigneBatterie(static_cast<int64_t>(time(nullptr))));
+        sendBatterySetpoint(calculateBatterySetpoint(static_cast<int64_t>(time(nullptr))));
         lastControlMs = millis();
         controlAttempted = true;
     }

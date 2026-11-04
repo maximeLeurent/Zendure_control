@@ -80,9 +80,10 @@ The build invokes the KeePass pre-build script and prompts for the database mast
 
 | Path | Contents |
 | --- | --- |
-| `src/main.cpp` | Wi-Fi setup, polling schedule, control calculation, and main loop |
+| `src/main.cpp` | Polling schedule, control calculation, and main loop |
 | `include/enphase.h` | Enphase Enlighten token retrieval and gateway consumption reads |
 | `include/zendure.h` | Zendure local API reads and setpoint writes |
+| `include/wifi_connection.h` | Initial Wi-Fi connection and reconnection helpers |
 | `include/config.h` | Network addresses and control parameters |
 | `include/secrets.h` | Runtime accessor for the build-time injected KeePass secret registry |
 | `load_secrets.py` | PlatformIO pre-build script that retrieves and injects KeePass secrets |
