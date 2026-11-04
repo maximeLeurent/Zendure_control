@@ -8,6 +8,11 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/x509_crt.h>
 
+// Editor-only placeholder; real builds receive the registry from KeePass.
+#if defined(__INTELLISENSE__) && !defined(KEEPASS_SECRETS_BASE64)
+#define KEEPASS_SECRETS_BASE64 ""
+#endif
+
 inline const char *get_secret(const char *name, bool certificate = false)
 {
     // Keep the registry alive so returned strings remain valid between calls.
