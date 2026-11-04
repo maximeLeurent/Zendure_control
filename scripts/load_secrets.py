@@ -27,7 +27,7 @@ Requirements:
 - The script must be declared as a PlatformIO pre-build script:
 
     extra_scripts =
-        pre:load_secrets.py
+        pre:scripts/load_secrets.py
 """
 
 Import("env")
@@ -64,14 +64,12 @@ def load_secrets():
         "ZENDURE_SERIAL_NUMBER": {"entry": "ZENDURE_SERIAL_NUMBER", "certificate": False},
     }
 
-
     # -----------------------------------------------------------------------
     # KeePass authentication
     # -----------------------------------------------------------------------
 
     # Ask for the KeePass master password without displaying it in the terminal.
     master_password = getpass.getpass("KeePass master password: ")
-
 
     # -----------------------------------------------------------------------
     # KeePass secret retrieval
@@ -111,7 +109,6 @@ def load_secrets():
 
         return result.stdout[:-1] if result.stdout.endswith("\n") else result.stdout
 
-
     def parse_certif(value, secret_name):
         """Normalize and validate a PEM certificate or certificate bundle.
 
@@ -139,15 +136,12 @@ def load_secrets():
             ) from None
         return certificate
 
-
     # -----------------------------------------------------------------------
     # PlatformIO build environment
     # -----------------------------------------------------------------------
 
     secret_values = {}
     for secret_name, settings in SECRETS.items():
-
-        # Retrieve the secret from KeePass.
         secret = get_keepass_secret(settings["entry"])
 
         if settings["certificate"]:
@@ -160,7 +154,6 @@ def load_secrets():
         json.dumps(secret_values, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     ).decode("ascii")
     env.Append(CPPDEFINES=[("KEEPASS_SECRETS_BASE64", f'\\"{encoded_secrets}\\"')])
-
 
     # Do not print the secret values.
     print("KeePass secrets successfully loaded.")
