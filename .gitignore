@@ -15,4 +15,3 @@ __pycache__/
 # Secrets
 .env
 *.kdbx
-secrets.h

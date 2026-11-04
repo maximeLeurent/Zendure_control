@@ -16,6 +16,25 @@ extern double consumptionPowerW;
 extern int64_t consumptionTimestamp;
 extern String enphaseToken;
 extern int64_t enphaseTokenDeadline;
+extern unsigned long lastTokenAttemptMs;
+extern bool tokenRequestAttempted;
+
+inline void verifyEnphaseParameters()
+{
+    if (ENPHASE_GATEWAY_IP[0] == '\0')
+    {
+        Serial.println("Set ENPHASE_GATEWAY_IP to the local gateway IP address to enable power readings.");
+    }
+}
+
+inline bool shouldRetrieveEnphaseToken(int64_t now, unsigned long nowMs)
+{
+    const bool tokenNeedsRefresh =
+        enphaseToken.isEmpty() || enphaseTokenDeadline - now <= TOKEN_REFRESH_MARGIN_SECONDS;
+    const bool retryAllowed =
+        !tokenRequestAttempted || nowMs - lastTokenAttemptMs >= TOKEN_RETRY_INTERVAL_MS;
+    return now >= MIN_VALID_UNIX_TIME && tokenNeedsRefresh && retryAllowed;
+}
 
 inline bool retrieveEnphaseToken()
 {

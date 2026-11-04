@@ -3,9 +3,16 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "secrets.h"
+
+inline bool needsWifiReconnection()
+{
+    return WiFi.status() != WL_CONNECTED;
+}
+
 inline void waitForWifiConnection()
 {
-    while (WiFi.status() != WL_CONNECTED)
+    while (needsWifiReconnection())
     {
         delay(1000);
         Serial.println("Connecting...");
@@ -20,6 +27,22 @@ inline void connectToWifi(const char *ssid, const char *password)
     Serial.println("\nConnecting to Wi-Fi...");
     WiFi.begin(ssid, password);
     waitForWifiConnection();
+}
+
+inline void setupWifi()
+{
+    Serial.println("\nCollecting Wifi secrets...");
+    const char *const wifiSsid = get_secret("WIFI_SSID", false);
+    const char *const wifiPassword = get_secret("WIFI_PASSWORD", false);
+    if (wifiSsid == nullptr || wifiPassword == nullptr)
+    {
+        Serial.println("Wi-Fi secrets unavailable. Startup stopped.");
+        while (true)
+        {
+            delay(1000);
+        }
+    }
+    connectToWifi(wifiSsid, wifiPassword);
 }
 
 inline void reconnectToWifi()

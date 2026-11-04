@@ -66,7 +66,7 @@ The build invokes the KeePass pre-build script and prompts for the database mast
 
 ## Test-charge mode
 
-`TEST_CHARGE` in `src/main.cpp` is a compile-time switch and is `false` by default. When enabled, it bypasses normal regulation and sends charge requests that step from 50 W to 300 W in 50 W increments, approximately every five seconds. Use this only when deliberately testing the battery in a controlled setup, and restore it to `false` for normal operation.
+`TEST_CHARGE` in `include/control.h` is a compile-time switch and is `false` by default. When enabled, it bypasses normal regulation and sends charge requests that step from 50 W to 300 W in 50 W increments, approximately every five seconds. Use this only when deliberately testing the battery in a controlled setup, and restore it to `false` for normal operation.
 
 ## Security and operational notes
 
@@ -80,8 +80,10 @@ The build invokes the KeePass pre-build script and prompts for the database mast
 
 | Path | Contents |
 | --- | --- |
-| `src/main.cpp` | Polling schedule, control calculation, and main loop |
+| `src/main.cpp` | Startup, Wi-Fi reconnection, and main loop |
+| `include/control.h` | Token refresh scheduling, polling, control calculation, and test-charge mode |
 | `include/enphase.h` | Enphase Enlighten token retrieval and gateway consumption reads |
+| `src/enphase.cpp` | Shared Enphase token and retry state |
 | `include/zendure.h` | Zendure local API reads and setpoint writes |
 | `include/wifi_connection.h` | Initial Wi-Fi connection and reconnection helpers |
 | `include/config.h` | Network addresses and control parameters |
