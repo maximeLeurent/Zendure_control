@@ -28,7 +28,7 @@ void setup()
     delay(1000);
     verifyEnphaseParameters();
     setupWifi();
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    configTzTime(LOCAL_TIME_ZONE, "pool.ntp.org", "time.nist.gov");
 }
 
 void loop()

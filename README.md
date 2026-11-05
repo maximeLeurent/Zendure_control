@@ -6,7 +6,15 @@ The firmware runs on an ESP32 with the Arduino framework. It polls both devices 
 
 ## How it works
 
-The ESP32 reads consumption data from the Enphase gateway and battery data from the Zendure device, then sends a power request to the battery. The control strategy is subject to change.
+The ESP32 reads consumption data from the Enphase gateway and battery data from the Zendure device, then sends a power request to the battery. Local dates and tariff times use Paris time with automatic daylight-saving changes.
+
+- **Winter (October 1 through March 31, inclusive):** during off-peak hours (22:30 to 06:30), charge toward 80% SOC without discharging. Charge power is recalculated from missing energy and time remaining, aiming to finish at 06:00 (30 minutes early). Outside off-peak hours, discharge only to cover net imports, down to the minimum SOC.
+- **Summer (the remaining dates):** charge from PV surplus and discharge to cover net imports, irrespective of tariff times.
+- **All year:** PV surplus is absorbed up to the maximum SOC, including above the winter 80% target. During winter off-peak hours, charging uses the greater of the surplus and the calculated charging power. Charge and discharge stop at their respective SOC limits; power limits, the deadband, and measurement freshness checks remain active.
+
+The charging estimate uses 5,810 Wh of storage capacity. The early-finish margin provides some allowance for losses and SOC rounding, but reaching the target is not guaranteed if available power or time is insufficient. If the target is still unmet after 06:00, charging continues at the maximum allowed power until 06:30 or until the target is reached. All dates, times, capacity, margin, and the winter target are configurable.
+
+Grid import limiting has priority over the seasonal strategy. Using measured net grid import plus current battery power, the controller reconstructs demand without the battery and adjusts the final setpoint to keep grid import at or below 6,000 W: it reduces charging, stops charging, or forces discharge even during winter off-peak hours. Battery minimum SOC and maximum discharge power remain enforced. If they prevent meeting the import limit, the controller requests the best permitted setpoint and logs a warning. This is a sampled software control, not a hard electrical protection: measurement delays, communication failures, sudden load changes, or insufficient battery reserves can still cause an exceedance. Stale measurement safety still forces a zero setpoint.
 
 The firmware currently uses the Zendure local HTTP endpoints `/properties/report` and `/properties/write`.
 
@@ -33,6 +41,14 @@ Edit `include/config.h` to match your network and battery. The checked-in IP add
 | `BATTERY_MAX_DISCHARGE_POWER_W` | Maximum requested discharge power |
 | `POWER_DEADBAND_W` | Range around zero where the request is zero |
 | `MEASUREMENT_MAX_AGE_SECONDS` | Maximum accepted age of either measurement |
+| `GRID_MAX_IMPORT_POWER_W` | Priority limit on grid import (6,000 W), subject to battery capability |
+| `BATTERY_CAPACITY_WH` | Total usable battery capacity for the charging estimate (5,810 Wh) |
+| `WINTER_START_MONTH` / `WINTER_START_DAY` | First winter date, inclusive (October 1) |
+| `WINTER_END_MONTH` / `WINTER_END_DAY` | Last winter date, inclusive (March 31) |
+| `WINTER_CHARGE_TARGET_SOC` | Winter off-peak grid-charging target (80%) |
+| `OFF_PEAK_START_MINUTE` / `OFF_PEAK_END_MINUTE` | Daily local off-peak interval, minutes after midnight (22:30 to 06:30); supports crossing midnight |
+| `WINTER_CHARGE_MARGIN_SECONDS` | How early to aim to reach the target (1,800 s) |
+| `LOCAL_TIME_ZONE` | POSIX local timezone rule (Paris, with daylight saving) |
 
 Set power limits and SOC thresholds to values supported by your specific battery and installation.
 
@@ -65,6 +81,19 @@ pio device monitor --baud 115200
 The build invokes the KeePass pre-build script and prompts for the database master password. Select the appropriate serial upload port in PlatformIO if it cannot be detected automatically. The serial monitor reports connection status, measurements, token requests, and battery setpoints.
 
 ## Test-charge mode
+
+### Strategy tests
+
+The standalone C++ tests do not require hardware, Arduino libraries, or secrets. With a native C++ compiler, run from the project directory:
+
+```sh
+g++ -std=c++11 -Iinclude test/test_battery_strategy.cpp -o test_battery_strategy.exe
+./test_battery_strategy.exe
+```
+
+They cover season boundaries, the overnight off-peak interval, adaptive charging, PV priority, summer behavior, power limits, inclusive SOC limits, and priority grid import limiting (including fractional watts and insufficient battery capability).
+
+### Hardware test-charge mode
 
 `TEST_CHARGE` in `include/control.h` is a compile-time switch and is `false` by default. When enabled, it bypasses normal regulation and sends charge requests that step from 50 W to 300 W in 50 W increments, approximately every five seconds. Use this only when deliberately testing the battery in a controlled setup, and restore it to `false` for normal operation.
 

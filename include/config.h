@@ -45,7 +45,30 @@ constexpr int BATTERY_MAX_CHARGE_POWER_W = 1500;
 // Maximum allowed battery discharging power (W).
 constexpr int BATTERY_MAX_DISCHARGE_POWER_W = 1500;
 
+// Total usable storage capacity (Wh).
+constexpr double BATTERY_CAPACITY_WH = 5810.0;
+
+// --- Seasonal control (local dates and times) ---
+
+constexpr int WINTER_START_MONTH = 10;
+constexpr int WINTER_START_DAY = 1;
+constexpr int WINTER_END_MONTH = 3;
+constexpr int WINTER_END_DAY = 31;
+
+// Grid charging stops at this SOC; PV surplus can still reach BATTERY_SOC_MAX.
+constexpr int WINTER_CHARGE_TARGET_SOC = 80;
+
+// Off-peak interval, start included and end excluded (minutes after midnight).
+constexpr int OFF_PEAK_START_MINUTE = 22 * 60 + 30;
+constexpr int OFF_PEAK_END_MINUTE = 6 * 60 + 30;
+
+// Aim to finish grid charging this long before the off-peak interval ends (s).
+constexpr int WINTER_CHARGE_MARGIN_SECONDS = 30 * 60;
+
 // --- Control: regulation and measurement validity ---
+
+// Maximum grid import; overrides seasonal charging and discharging strategy (W).
+constexpr int GRID_MAX_IMPORT_POWER_W = 5800;
 
 // Maximum measurement age before forcing the setpoint to zero (s).
 constexpr int64_t MEASUREMENT_MAX_AGE_SECONDS = 10;
@@ -57,6 +80,9 @@ constexpr double POWER_DEADBAND_W = 50.0;
 constexpr unsigned long CONTROL_INTERVAL_MS = 1000;
 
 // --- Clock ---
+
+// Paris local time, including automatic daylight-saving changes.
+const char *const LOCAL_TIME_ZONE = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // Earliest timestamp accepted as a synchronized clock
 // (seconds since January 1, 1970 at 00:00 UTC).

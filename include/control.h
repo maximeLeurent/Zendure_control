@@ -4,6 +4,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "battery_strategy.h"
 #include "config.h"
 #include "enphase.h"
 #include "zendure.h"
@@ -21,9 +22,9 @@ inline int getMaxBatteryPower(bool discharge)
 {
     if (discharge)
     {
-        return batterySoc < BATTERY_SOC_MIN ? 0 : BATTERY_MAX_DISCHARGE_POWER_W;
+        return batterySoc <= BATTERY_SOC_MIN ? 0 : BATTERY_MAX_DISCHARGE_POWER_W;
     }
-    return batterySoc > BATTERY_SOC_MAX ? 0 : BATTERY_MAX_CHARGE_POWER_W;
+    return batterySoc >= BATTERY_SOC_MAX ? 0 : BATTERY_MAX_CHARGE_POWER_W;
 }
 
 inline bool areMeasurementTimestampsValid(int64_t now)
@@ -60,15 +61,25 @@ inline int calculateBatterySetpoint(int64_t now)
 
     const double gridNoBatteryW = consumptionPowerW + batteryPowerW;
     Serial.printf("Net consumption without battery : %.0f W\n", gridNoBatteryW);
-    if (gridNoBatteryW > POWER_DEADBAND_W)
+    const time_t currentTime = static_cast<time_t>(now);
+    tm localTime = {};
+    if (localtime_r(&currentTime, &localTime) == nullptr)
     {
-        return static_cast<int>(fmin(gridNoBatteryW, getMaxBatteryPower(true)));
+        return 0;
     }
-    if (gridNoBatteryW < -POWER_DEADBAND_W)
+    const bool winter = isWinterDate(localTime);
+    const int64_t offPeakSecondsRemaining = getOffPeakSecondsRemaining(currentTime, localTime);
+    Serial.printf("Control mode: %s | Off-peak: %s\n", winter ? "winter" : "summer",
+                  offPeakSecondsRemaining > 0 ? "yes" : "no");
+    const int setpointW = calculateSeasonalBatteryPower(gridNoBatteryW, batterySoc, winter, offPeakSecondsRemaining);
+    const double expectedGridImportW = gridNoBatteryW - setpointW;
+    Serial.printf("Grid import: measured %.0f W | Expected after setpoint: %.0f W | Limit: %d W\n",
+                  consumptionPowerW, expectedGridImportW, GRID_MAX_IMPORT_POWER_W);
+    if (expectedGridImportW > GRID_MAX_IMPORT_POWER_W)
     {
-        return -static_cast<int>(fmin(-gridNoBatteryW, getMaxBatteryPower(false)));
+        Serial.println("Grid import limit cannot be met: battery SOC or discharge power limit reached.");
     }
-    return 0;
+    return setpointW;
 }
 
 inline void testBatteryCharging()
